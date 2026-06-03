@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/dashboard_screen.dart';
 
 void main() {
   runApp(const PlantTrackerApp());
@@ -31,7 +32,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
   static const List<Widget> _widgetOptions = <Widget>[
-    Text('Dashboard (Your Plants go here)'),
+    DashboardScreen(),
     Text('Search (API data goes here)'),
     Text('Settings (Theme toggles go here)'),
   ];
