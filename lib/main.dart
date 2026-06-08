@@ -1,129 +1,77 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/dashboard_screen.dart';
-import 'screens/search_screen.dart';
-import 'screens/settings_screen.dart';
+import 'package:provider/provider.dart';
 
-void main() {
-  runApp(const PlantTrackerApp());
+import 'core/controllers/app_controller.dart';
+import 'core/theme/app_theme.dart';
+import 'data/database/app_database.dart';
+import 'data/repositories/plant_repository.dart';
+import 'data/repositories/profile_repository.dart';
+import 'navigation/app_router.dart';
+import 'services/notification_service.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final plantRepository = PlantRepository();
+  final profileRepository = ProfileRepository();
+  final notificationService = NotificationService();
+  final appController = AppController(profileRepository);
+
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider<PlantRepository>.value(value: plantRepository),
+        Provider<ProfileRepository>.value(value: profileRepository),
+        Provider<NotificationService>.value(value: notificationService),
+        ChangeNotifierProvider<AppController>.value(value: appController),
+      ],
+      child: const PlantApp(),
+    ),
+  );
+
+  unawaited(
+    _initializeApp(
+      plantRepository: plantRepository,
+      notificationService: notificationService,
+      appController: appController,
+    ),
+  );
 }
 
-class PlantTrackerApp extends StatefulWidget {
-  const PlantTrackerApp({super.key});
+Future <void> _initializeApp({
+  required PlantRepository plantRepository,
+  required NotificationService notificationService,
+  required AppController appController,
+}) async {
+  try {
+    await AppDatabase.instance.database;
+    await plantRepository.ensureSeedData();
+    await appController.load();
 
-  @override
-  State<PlantTrackerApp> createState() => _PlantTrackerAppState();
+
+    //await notificationService.init();
+  } catch (error, stackTrace) {
+    debugPrint('App initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
-class _PlantTrackerAppState extends State<PlantTrackerApp> {
-  ThemeMode _themeMode = ThemeMode.light;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadThemeSetting();
-  }
-
-  // Load theme preference from local storage
-  Future<void> _loadThemeSetting() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isDark = prefs.getBool('is_dark_mode') ?? false;
-    setState(() {
-      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-    });
-  }
-
-  // Save theme preference to local storage
-  Future<void> _toggleTheme(bool isDark) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_dark_mode', isDark);
-    setState(() {
-      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-    });
-  }
+class PlantApp extends StatelessWidget {
+  const PlantApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Plant Tracker',
-      // Light Theme Token Definition
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      // Dark Theme Token Definition
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: _themeMode, // Controls which theme is currently active
-      home: MainNavigationScreen(
-        isDarkMode: _themeMode == ThemeMode.dark,
-        onThemeChanged: _toggleTheme,
-      ),
-    );
-  }
-}
+    final appController = context.watch<AppController>();
 
-class MainNavigationScreen extends StatefulWidget {
-  final bool isDarkMode;
-  final ValueChanged<bool> onThemeChanged;
-
-  const MainNavigationScreen({
-    super.key,
-    required this.isDarkMode,
-    required this.onThemeChanged,
-  });
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _selectedIndex = 0;
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Re-create the list here dynamically to pass the theme settings down
-    final List<Widget> widgetOptions = <Widget>[
-      const DashboardScreen(),
-      const SearchScreen(),
-      SettingsScreen(
-        isDarkMode: widget.isDarkMode,
-        onThemeChanged: widget.onThemeChanged,
-      ),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Plant Tracker 🌿'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: Center(
-        child: widgetOptions.elementAt(_selectedIndex),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Theme.of(context).colorScheme.primary,
-        onTap: _onItemTapped,
-      ),
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'PlantApp',
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: appController.themeMode,
+      routerConfig: AppRouter.router,
     );
   }
 }
